@@ -7,3 +7,4 @@ __pycache__/
 *.pem
 *.key
 baseline.json
+market-auto-refresh-evidence.json

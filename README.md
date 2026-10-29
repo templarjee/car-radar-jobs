@@ -9,6 +9,8 @@ Minimal public Arval catalog runner. The application, database and production op
 - Pushes to main run offline tests only.
 - The emergency workflow runs only when an authorized main-branch push changes `recovery-request.json`; it validates a dry crawl before importing the same snapshot.
 - Completed imports trigger server-verified availability confirmation.
+- External market onboarding runs every 15 minutes; maintenance runs Mondays at 06:17 UTC. Source planning, budgets, cooldowns and archives remain private; only aggregate run counters enter public logs.
+- Cached market evaluation and photo workers remain in Supabase Cron. A separate targeted catalog job is unnecessary while the full catalog runs daily.
 
 ## Authentication and data handling
 
