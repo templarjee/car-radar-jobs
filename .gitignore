@@ -1,0 +1,9 @@
+data/
+*status.json
+*partial.json
+__pycache__/
+*.pyc
+.env*
+*.pem
+*.key
+baseline.json
