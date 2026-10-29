@@ -1,5 +1,6 @@
 """Collect, validate and optionally import; raw data never leaves the runner as an artifact."""
 import argparse
+from urllib.error import HTTPError
 import json
 from pathlib import Path
 from arval_db_sync import get_github_oidc, ENDPOINT
@@ -13,8 +14,13 @@ def api(payload):
     # A fresh token is requested for every call; never print it or HTTP bodies.
     req = Request(ENDPOINT, data=json.dumps(payload).encode(), method="POST", headers={
         "Authorization": "Bearer " + get_github_oidc(), "Content-Type": "application/json"})
-    with urlopen(req, timeout=120) as response:
-        return json.load(response)
+    try:
+        with urlopen(req, timeout=120) as response:
+            return json.load(response)
+    except HTTPError as error:
+        # The server returns only fixed aggregate/error codes, never payloads or tokens.
+        body = json.loads(error.read(4096))
+        raise RuntimeError(f"Ingest HTTP {error.code}: {body.get('error')}, reason={body.get('reason')}") from None
 
 
 def main():
