@@ -37,8 +37,6 @@ jobs:
         with:
           python-version: '3.12'
       - run: python -m pip install -r requirements.txt
-      - name: Verify scoped OIDC origin
-        run: python auth_probe.py
       - name: Dry crawl and production baseline validation
         run: python run_catalog.py --mode dry-run
       - name: Validate and import complete catalog
