@@ -2,6 +2,21 @@
 
 Minimal public Arval catalog runner. The application, database and production operations remain private.
 
+## Production policy
+
+**Production policy: DAILY FULL CATALOG, INDEFINITE.**
+
+The sole automatic catalog scheduler is `.github/workflows/arval-scheduled.yml`,
+with `17 7 * * *` on main. Every day includes weekends and Mondays. There is no
+November 4/9 switch, expiration, targeted daily job or weekly-only fallback.
+This owner decision was reaffirmed on 2026-11-02 (V2.30).
+
+GitHub cron is best effort, not an execution-time guarantee. Existing owner-only
+monitoring checks actual complete catalog imports and price counts, separately
+from availability receipts; it is on demand, not continuous alert delivery.
+Investigate a missing current-day import after 14:17 UTC through Actions and
+receipts before authorizing recovery. Do not add an automatic second crawler.
+
 ## Execution
 
 - Standard GitHub-hosted `ubuntu-24.04` runners.
