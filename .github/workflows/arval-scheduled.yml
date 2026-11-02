@@ -9,6 +9,8 @@ on:
         type: choice
         options: [smoke, dry-run, import]
         default: dry-run
+  # Production policy: DAILY FULL CATALOG, INDEFINITE (PO, 2026-11-02).
+  # No November cutover. Keep legacy private schedulers disabled.
   schedule:
     - cron: '17 7 * * *'
 permissions:
