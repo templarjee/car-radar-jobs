@@ -1,9 +1,14 @@
 name: Arval public catalog
+run-name: ${{ inputs.ops_request_id && format('ops:{0}', inputs.ops_request_id) || github.workflow }}
 on:
   push:
     branches: [main]
   workflow_dispatch:
     inputs:
+      ops_request_id:
+        description: Private operations audit correlation ID
+        type: string
+        required: false
       mode:
         description: Operation (start with dry-run before import)
         type: choice
