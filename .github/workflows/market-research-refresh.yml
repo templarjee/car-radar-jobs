@@ -1,9 +1,20 @@
 name: Public external market refresh
+run-name: ${{ inputs.ops_request_id && format('ops:{0}', inputs.ops_request_id) || github.workflow }}
 on:
   schedule:
     - cron: '7,22,37,52 * * * *'
     - cron: '17 6 * * 1'
   workflow_dispatch:
+    inputs:
+      ops_request_id:
+        description: Private operations audit correlation ID
+        type: string
+        required: false
+      kind:
+        description: Use onboarding for eligible pending cohorts
+        type: choice
+        options: [onboarding, maintenance]
+        default: maintenance
   push:
     branches: [main]
     paths: ['market-recovery-request.json']
@@ -43,7 +54,7 @@ jobs:
       - run: python -m pip install -r requirements.txt
       - name: Fetch and acknowledge bounded private source plan
         env:
-          MARKET_REFRESH_KIND: ${{ github.event_name == 'workflow_dispatch' && 'maintenance' || github.event.schedule == '17 6 * * 1' && 'maintenance' || 'onboarding' }}
+          MARKET_REFRESH_KIND: ${{ github.event_name == 'workflow_dispatch' && inputs.kind || github.event.schedule == '17 6 * * 1' && 'maintenance' || 'onboarding' }}
         run: python market_auto_refresh.py --publish
       - name: Remove private planning evidence
         if: always()
