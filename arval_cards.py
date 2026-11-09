@@ -13,6 +13,33 @@ KM_RE = re.compile(r"(\d{1,3}(?:[\s\u00a0\u202f]\d{3})+|\d{1,6})\s*km\b", re.I)
 DATE_RE = re.compile(r"v\s+provozu\s+od\s*:?\s*(\d{2}/\d{4})", re.I)
 
 
+def pending_price_records(soup, base_url):
+    """Recognize explicit source placeholders, never arbitrary missing prices."""
+    found = {}
+    for card in soup.select('.cars-list > div > .content-container'):
+        price = card.select_one('.prices .price')
+        heading = card.find(['h2', 'h3'])
+        content = card.get_text(' ', strip=True)
+        km = KM_RE.search(content)
+        if (not price or price.get_text(' ', strip=True) != 'Cenu připravujeme'
+                or not heading or not km or PRICE_RE.search(content)):
+            continue
+        urls = {}
+        for link in card.select('a[href]'):
+            url = urllib.parse.urljoin(base_url, link['href'])
+            parsed = urllib.parse.urlparse(url)
+            match = CAR_PATH.fullmatch(parsed.path)
+            if parsed.hostname == HOST and match:
+                urls[match[1]] = url
+        if len(urls) == 1:
+            car_id, url = next(iter(urls.items()))
+            found[car_id] = {'id': car_id, 'url': url,
+                             'title': heading.get_text(' ', strip=True),
+                             'mileage_km': int(re.sub(r'\D', '', km[1])),
+                             'price_status': 'pending'}
+    return list(found.values())
+
+
 def car_records(soup, base_url):
     """One record per stable ID, with full details (no first-12 truncation)."""
     found = {}

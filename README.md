@@ -33,6 +33,13 @@ No database credentials or long-lived secrets. Short-lived GitHub OIDC tokens au
 
 Snapshots remain transient on the runner. No data commits, caches or uploaded artifacts. Logs expose only aggregate counts. Imports fail on incomplete pagination, duplicate IDs, missing mandatory fields, implausible baseline drops or stale capture times. The backend rechecks stored counts and commits ingestion atomically. A green smoke/dry-run is not a successful production import.
 
+Cards explicitly marked `Cenu připravujeme` are recorded separately as pending-price
+pagination evidence, including pages containing only those cards. They create no
+price observations; import totals remain counts of priced offers. Arbitrary empty
+pages, missing prices without that source marker, and unknown error responses do
+not establish a catalog end. Presence tracking for unpriced offers is a separate
+backend concern; the existing availability contract still receives priced offers.
+
 Availability is confirmed only after the backend independently retrieves successful source-run evidence and matching immutable database receipts. A crawl cannot directly authorize archival.
 
 ## Local verification

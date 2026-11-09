@@ -26,13 +26,30 @@ class SnapshotGateTests(unittest.TestCase):
                 path.parent.mkdir()
                 path.write_text(json.dumps(data))
                 Path("baseline.json").write_text(json.dumps({"total_unique":baseline}))
-                Path("arval_snapshot_status.json").write_text(json.dumps({"complete":True,"finish_reason":"end_of_catalog","path":str(path),"total_unique":100,"page_count":5}))
+                Path("arval_snapshot_status.json").write_text(json.dumps({"complete":True,"finish_reason":"end_of_catalog","path":str(path),"total_unique":100,"page_count":len(data['pages'])}))
                 return validate()
             finally:
                 os.chdir(old)
 
     def test_complete_valid_snapshot(self):
         self.assertEqual(self.check(self.fixture()).name,"arval-baseline-2026-10-29.json")
+
+    def test_terminal_pending_price_page_has_explicit_evidence(self):
+        data = self.fixture()
+        data['pages'][-1]['next_url'] = 'terminal'
+        data['pages'].append({'page':6, 'http_status':200, 'count':1, 'new':0,
+                              'next_url':None, 'pending_price_ids':['95143']})
+        data['pending_price_cars'] = [{'id':'95143', 'title':'DS DS4',
+                                      'url':'https://www.arvalclub.cz/cz/ds/ds4/95143/',
+                                      'mileage_km':42332, 'price_status':'pending'}]
+        self.check(data)
+        for mutate in [lambda d:d.pop('pending_price_cars'),
+                       lambda d:d['pages'][-1].update(pending_price_ids=[]),
+                       lambda d:d['pending_price_cars'][0].update(price_status='unknown'),
+                       lambda d:d['pages'][-1].update(next_url='more'),
+                       lambda d:d['pages'][-1].update(count=0)]:
+            broken = copy.deepcopy(data); mutate(broken)
+            with self.assertRaises(ValueError): self.check(broken)
 
     def test_partial_and_inconsistent_pages_rejected(self):
         for mutate in [lambda d:d.update(complete=False),

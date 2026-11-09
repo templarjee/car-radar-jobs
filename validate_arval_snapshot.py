@@ -20,12 +20,26 @@ def validate():
     data = json.loads(path.read_text(encoding="utf-8"))
     cars = data.get("cars", [])
     pages = data.get("pages", [])
+    pending = data.get('pending_price_cars', [])
+    pending_ids = [r.get('id') for r in pending]
+    if (len(pending_ids) != len(set(pending_ids))
+            or any(not isinstance(r.get('id'), str) or not r['id'].isdigit()
+                   or r.get('price_status') != 'pending' or not r.get('title')
+                   or type(r.get('mileage_km')) is not int
+                   or not r.get('url', '').startswith('https://www.arvalclub.cz/cz/')
+                   or not r['url'].endswith('/' + r['id'] + '/') for r in pending)
+            or set(pending_ids) & {c.get('id') for c in cars}
+            or set(pending_ids) != {v for p in pages for v in p.get('pending_price_ids', [])}):
+        raise ValueError('Invalid pending-price evidence')
     if (data.get("complete") is not True or data.get("finish_reason") != "end_of_catalog"
             or not pages or len(pages) != status.get("page_count")
             or pages[-1].get("next_url") is not None
             or any(p.get("page") != i or p.get("http_status") != 200
                    or not 1 <= p.get("count", 0) <= 20
-                   or p.get("new", 0) < 1
+                   or p.get("new", 0) < 0
+                   or (p.get('new', 0) == 0 and not p.get('pending_price_ids'))
+                   or len(set(p.get('pending_price_ids', []))) != len(p.get('pending_price_ids', []))
+                   or p.get('count', 0) != p.get('new', 0) + len(p.get('duplicate_ids', [])) + len(p.get('pending_price_ids', []))
                    for i, p in enumerate(pages, 1))
             or sum(p["new"] for p in pages) != len(cars)
             or data.get("total_unique") != len(cars)):

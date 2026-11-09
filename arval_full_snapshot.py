@@ -18,7 +18,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from bs4 import BeautifulSoup
-from arval_cards import car_records
+from arval_cards import car_records, pending_price_records
 
 START = "https://www.arvalclub.cz/nabidka-vozu/prodej/?"
 HOST = "www.arvalclub.cz"
@@ -131,6 +131,7 @@ def enrich_records(soup, records):
 def run():
     started = datetime.now(timezone.utc).isoformat()
     pages, cars, seen, current = [], {}, set(), START
+    pending_prices = {}
     robots_info = {}
     reason = "not_started"
     try:
@@ -148,6 +149,8 @@ def run():
                 time.sleep(DELAY)
             soup, final = download(current)
             found = enrich_records(soup, car_records(soup, final))
+            pending = {r['id']: r for r in pending_price_records(soup, final)}
+            pending_prices.update(pending)
             incoming = {r["id"]: r for r in found}
             repeated = sorted(set(incoming) & set(cars))
             new = {key: val for key, val in incoming.items() if key not in cars}
@@ -155,15 +158,16 @@ def run():
             next_url = page_next(soup, final)
             pages.append({
                 "page": number, "url": current, "http_status": 200,
-                "count": len(found), "new": len(new),
+                "count": len(found) + len(pending), "new": len(new),
+                "pending_price_ids": sorted(pending),
                 "duplicate_ids": repeated, "next_url": next_url,
             })
             print(
                 f"Page {number}: {len(found)} rows, {len(new)} new, "
-                f"{len(repeated)} dupes, total={len(cars)}, next={next_url}",
+                f"{len(repeated)} dupes, {len(pending)} pending prices, total={len(cars)}, next={next_url}",
                 flush=True,
             )
-            if not incoming:
+            if not incoming and not pending:
                 reason = "empty_page"
                 break
             if next_url is None:
@@ -172,7 +176,7 @@ def run():
             if next_url in seen:
                 reason = "url_loop"
                 break
-            if not new:
+            if not new and not pending:
                 reason = "no_new_car_ids"
                 break
             current = next_url
@@ -194,8 +198,10 @@ def run():
         "pages": pages,
         "total_unique": len(cars),
         "cars": sorted(cars.values(), key=lambda c: int(c["id"])),
+        "pending_price_cars": sorted(pending_prices.values(), key=lambda c: int(c['id'])),
         "notes": [
             "Only unauthenticated public sale-listing data.",
+            "Explicit pending-price listings are pagination evidence only; no invented price observations.",
             "Current price is last displayed price candidate, not checked against detail pages.",
             "The 10% benefit through Ceska sporitelna is not included or verified.",
             "All cars are an instantaneous snapshot, not evidence of their market value.",
