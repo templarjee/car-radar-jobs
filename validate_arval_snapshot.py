@@ -2,6 +2,7 @@
 """Reject incomplete, suspicious or duplicate Arval full-catalog snapshots."""
 import json
 import sys
+from urllib.parse import urlparse
 from pathlib import Path
 from arval_normalize import normalize
 
@@ -21,16 +22,43 @@ def validate():
     cars = data.get("cars", [])
     pages = data.get("pages", [])
     pending = data.get('pending_price_cars', [])
+    if not isinstance(pending, list):
+        raise ValueError('Pending-price roster must be a list')
+    price_ids = {c.get('id') for c in cars}
     pending_ids = [r.get('id') for r in pending]
-    if (len(pending_ids) != len(set(pending_ids))
-            or any(not isinstance(r.get('id'), str) or not r['id'].isdigit()
-                   or r.get('price_status') != 'pending' or not r.get('title')
-                   or type(r.get('mileage_km')) is not int
-                   or not r.get('url', '').startswith('https://www.arvalclub.cz/cz/')
-                   or not r['url'].endswith('/' + r['id'] + '/') for r in pending)
-            or set(pending_ids) & {c.get('id') for c in cars}
-            or set(pending_ids) != {v for p in pages for v in p.get('pending_price_ids', [])}):
-        raise ValueError('Invalid pending-price evidence')
+    if len(pending_ids) != len(set(pending_ids)):
+        raise ValueError('Duplicate IDs in pending-price roster')
+    if set(pending_ids) & price_ids:
+        raise ValueError('Pending-price and priced rosters overlap: ' +
+                         str(sorted(set(pending_ids) & price_ids)[:10]))
+    for record in pending:
+        car_id = record.get('id')
+        if not isinstance(car_id, str) or not car_id.isdigit():
+            raise ValueError('Invalid pending-price ID: ' + repr(car_id))
+        url = urlparse(record.get('url', ''))
+        parts = url.path.strip('/').split('/')
+        if (record.get('price_status') != 'pending' or not record.get('title')
+                or type(record.get('mileage_km')) is not int
+                or url.scheme != 'https' or url.netloc != 'www.arvalclub.cz'
+                or url.query or url.fragment or not url.path.endswith('/')
+                or len(parts) != 4 or parts[0] != 'cz' or parts[-1] != car_id):
+            raise ValueError('Malformed pending-price record for Arval ID ' + car_id)
+    # A mutable paginated catalog may show an ID as "pending" on one page
+    # and as priced on another during the same crawl. Retain the priced
+    # observation; pending cards are pagination evidence, not prices.
+    evidence_ids = [v for page in pages for v in page.get('pending_price_ids', [])]
+    expected_pending = set(evidence_ids) - price_ids
+    if set(pending_ids) != expected_pending:
+        raise ValueError(
+            'Pending-price evidence mismatch: missing=' +
+            str(sorted(expected_pending - set(pending_ids))[:10]) +
+            ', extra=' + str(sorted(set(pending_ids) - expected_pending)[:10])
+        )
+    repeated = len(evidence_ids) - len(set(evidence_ids))
+    transitioned = len(set(evidence_ids) & price_ids)
+    if repeated or transitioned:
+        print(f'PENDING PRICE EVIDENCE: {repeated} repeat page appearances; '
+              f'{transitioned} IDs also observed with a price', flush=True)
     if (data.get("complete") is not True or data.get("finish_reason") != "end_of_catalog"
             or not pages or len(pages) != status.get("page_count")
             or pages[-1].get("next_url") is not None
