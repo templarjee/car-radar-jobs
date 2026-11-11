@@ -2,6 +2,7 @@
 import argparse
 from urllib.error import HTTPError
 import json
+import time
 from pathlib import Path
 from arval_db_sync import get_github_oidc, ENDPOINT
 from urllib.request import Request, urlopen
@@ -31,9 +32,22 @@ def main():
     if not baseline.get("ok") or not baseline.get("baseline"):
         raise RuntimeError("No verified production baseline")
     Path("baseline.json").write_text(json.dumps(baseline["baseline"]))
-    if args.mode != "saved-import":
-        run()
-    path = validate()
+    if args.mode == "saved-import":
+        path = validate()
+    else:
+        # Only repeat collection/validation. Never silently retry an import
+        # request whose transaction result may be unknown after a timeout.
+        for attempt in range(1, 4):
+            run()
+            try:
+                path = validate()
+                break
+            except ValueError as exc:
+                print(f"SNAPSHOT REJECTED attempt={attempt}/3: {exc}", flush=True)
+                if attempt == 3:
+                    raise
+                print("RETRYING FRESH CATALOG: previous snapshot will not be imported", flush=True)
+                time.sleep(8)
     data = json.loads(path.read_text())
     normalized = path.parent / "normalized" / path.name
     normalized.parent.mkdir(parents=True, exist_ok=True)
