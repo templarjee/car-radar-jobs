@@ -17,7 +17,10 @@ on:
   # Production policy: DAILY FULL CATALOG, INDEFINITE (PO, 2026-11-02).
   # No November cutover. Keep legacy private schedulers disabled.
   schedule:
-    - cron: '17 7 * * *'\n    # Backup attempts only collect when today's validated import is absent.\n    - cron: '47 14 * * *'\n    - cron: '47 18 * * *'
+    - cron: '17 7 * * *'
+    # Backup attempts only collect when today's validated import is absent.
+    - cron: '47 14 * * *'
+    - cron: '47 18 * * *'
 permissions:
   contents: read
 concurrency:
