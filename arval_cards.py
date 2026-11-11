@@ -29,8 +29,12 @@ def pending_price_records(soup, base_url):
             url = urllib.parse.urljoin(base_url, link['href'])
             parsed = urllib.parse.urlparse(url)
             match = CAR_PATH.fullmatch(parsed.path)
-            if parsed.hostname == HOST and match:
-                urls[match[1]] = url
+            if parsed.scheme == 'https' and parsed.hostname == HOST and match:
+                # Strip harmless tracking parameters; downstream evidence needs
+                # a canonical, stable vehicle URL for the same Arval ID.
+                urls[match[1]] = urllib.parse.urlunparse(
+                    (parsed.scheme, parsed.netloc, parsed.path.rstrip('/') + '/', '', '', '')
+                )
         if len(urls) == 1:
             car_id, url = next(iter(urls.items()))
             found[car_id] = {'id': car_id, 'url': url,
@@ -51,9 +55,17 @@ def car_records(soup, base_url):
         car_id = match.group(1)
         if car_id in found:
             continue
-        target = link.parent
-        for _ in range(10):
+        # Never climb out of a card into neighbouring listing prices:
+        # this could invent a price for a "Cenu pripravujeme" vehicle.
+        card = link.find_parent(class_='content-container')
+        target = card if card is not None else link.parent
+        for _ in range(1 if card is not None else 10):
             if not target or target.name in ("html", "body"):
+                break
+            if target.get('class') and 'cars-list' in target.get('class', []):
+                break
+            explicit = target.select_one('.prices .price')
+            if explicit and explicit.get_text(' ', strip=True) == 'Cenu připravujeme':
                 break
             heading = target.find(["h2", "h3"])
             content = target.get_text(" ", strip=True)
