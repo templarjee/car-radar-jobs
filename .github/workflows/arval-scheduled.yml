@@ -17,7 +17,7 @@ on:
   # Production policy: DAILY FULL CATALOG, INDEFINITE (PO, 2026-11-02).
   # No November cutover. Keep legacy private schedulers disabled.
   schedule:
-    - cron: '17 7 * * *'
+    - cron: '17 7 * * *'\n    # Backup attempts only collect when today's validated import is absent.\n    - cron: '47 14 * * *'\n    - cron: '47 18 * * *'
 permissions:
   contents: read
 concurrency:
@@ -55,8 +55,12 @@ jobs:
       - name: Dry crawl and production baseline validation
         if: github.event_name == 'workflow_dispatch' && inputs.mode == 'dry-run'
         run: python run_catalog.py --mode dry-run
+      - name: Check whether today was already imported
+        id: freshness
+        if: github.event_name == 'schedule'
+        run: python check_catalog_freshness.py
       - name: Validate and import complete catalog
-        if: github.event_name == 'schedule' || inputs.mode == 'import'
+        if: (github.event_name == 'schedule' && steps.freshness.outputs.current != 'true') || (github.event_name == 'workflow_dispatch' && inputs.mode == 'import')
         run: python run_catalog.py --mode import
       - name: Remove transient source data
         if: always()
