@@ -1,4 +1,4 @@
-"""Offline deployment contract: keep one unconditional daily catalog schedule.
+"""Offline deployment contract: keep one idempotent daily catalog workflow.
 
 Exact workflow predicates are intentional fail-closed guards against adding a
 date gate. No Actions dispatch, OIDC request or source HTTP is performed.
@@ -16,24 +16,28 @@ class DailyCatalogPolicyTests(unittest.TestCase):
     def test_daily_cron_has_no_calendar_cutoff(self):
         workflow = (ROOT / '.github/workflows/arval-scheduled.yml').read_text()
         crons = re.findall(r"^\s+- cron: '([^']+)'$", workflow, re.M)
-        self.assertEqual(crons, ['17 7 * * *'])
+        self.assertEqual(crons, ['17 7 * * *', '47 14 * * *', '47 18 * * *'])
         # Resolve the actual configured day/month/weekday fields, including the
         # former cutover dates, weekends, Mondays and a complete future year.
         minute, hour, dom, month, dow = crons[0].split()
         self.assertEqual((minute, hour), ('17', '7'))
         days = [date(2026, 11, n) for n in (3, 4, 5, 7, 8, 9)]
         days += [date(2027, 1, 1) + timedelta(days=n) for n in range(365)]
+        for cron in crons:
+            self.assertEqual(cron.split()[2:], ['*', '*', '*'])
         for day in days:
             with self.subTest(day=day):
                 self.assertTrue(all(field == '*' for field in (dom, month, dow)))
         conditions = re.findall(r'^    if: (.+)$', workflow, re.M)
         self.assertEqual(conditions, ["github.repository == 'templarjee/car-radar-jobs' && github.ref == 'refs/heads/main' && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.mode != 'smoke'))"])
-        self.assertIn("if: github.event_name == 'schedule' || inputs.mode == 'import'", workflow)
+        self.assertIn("steps.freshness.outputs.current != 'true'", workflow)
+        self.assertIn("run: python check_catalog_freshness.py", workflow)
         self.assertIn('run: python run_catalog.py --mode import', workflow)
         tree = ast.parse((ROOT / 'run_catalog.py').read_text())
         main = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == 'main')
         crawl = next(n for n in main.body if isinstance(n, ast.If) and any(isinstance(c, ast.Call) and isinstance(c.func, ast.Name) and c.func.id == 'run' for c in ast.walk(n)))
-        self.assertEqual(ast.unparse(crawl.test), "args.mode != 'saved-import'")
+        self.assertEqual(ast.unparse(crawl.test), "args.mode == 'saved-import'")
+        self.assertTrue(any(isinstance(n, ast.For) for n in ast.walk(crawl)))
 
     def test_single_scheduled_catalog_and_serialized_recovery(self):
         workflows = ROOT / '.github/workflows'

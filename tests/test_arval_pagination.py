@@ -45,6 +45,33 @@ class ArvalPaginationTests(unittest.TestCase):
                         html.replace('/cz/ds/ds4/95143/', 'https://other.example/cz/ds/ds4/95143/')]:
             self.assertEqual(pending_price_records(BeautifulSoup(invalid, 'html.parser'), base), [])
 
+    def test_neighboring_priced_card_cannot_price_pending_listing(self):
+        html = '''<div class="cars-list">
+            <div><div class="content-container"><h2>DS DS4</h2>
+              <span>42 332 km</span><a href="/cz/ds/ds4/95143/">Detail</a>
+              <div class="prices"><div class="price">Cenu připravujeme</div></div>
+            </div></div>
+            <div><div class="content-container"><h2>Ford Kuga</h2>
+              <span>90 000 km</span><a href="/cz/ford/kuga/12345/">Detail</a>
+              <div class="prices"><div class="price">350 000 Kč</div></div>
+            </div></div></div>'''
+        soup = BeautifulSoup(html, 'html.parser')
+        priced = car_records(soup, 'https://www.arvalclub.cz/')
+        pending = pending_price_records(soup, 'https://www.arvalclub.cz/')
+        self.assertEqual([r['id'] for r in priced], ['12345'])
+        self.assertEqual([r['id'] for r in pending], ['95143'])
+
+    def test_pending_link_tracking_is_canonicalized(self):
+        html = '''<div class="cars-list"><div><div class="content-container">
+            <h2>DS DS4</h2><p>42 332 km</p>
+            <a href="/cz/ds/ds4/95143/?from=listing">Detail</a>
+            <div class="prices"><div class="price">Cenu připravujeme</div></div>
+            </div></div></div>'''
+        pending = pending_price_records(BeautifulSoup(html, 'html.parser'),
+                                        'https://www.arvalclub.cz/')
+        self.assertEqual(pending[0]['url'],
+                         'https://www.arvalclub.cz/cz/ds/ds4/95143/')
+
     def test_next_link_uses_arval_navigation_endpoint(self):
         html = '<a href="/pages.script.php?action=cars-pos&amp;pos=20">Dalších 20 nabídek</a>'
         soup = BeautifulSoup(html, "html.parser")
