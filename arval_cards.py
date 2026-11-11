@@ -49,9 +49,13 @@ def car_records(soup, base_url):
     found = {}
     for link in soup.select("a[href]"):
         url = urllib.parse.urljoin(base_url, link.get("href", ""))
-        match = CAR_PATH.fullmatch(urllib.parse.urlparse(url).path)
-        if not match:
+        parsed = urllib.parse.urlparse(url)
+        match = CAR_PATH.fullmatch(parsed.path)
+        if not match or parsed.scheme != 'https' or parsed.hostname != HOST:
             continue
+        url = urllib.parse.urlunparse(
+            (parsed.scheme, parsed.netloc, parsed.path.rstrip('/') + '/', '', '', '')
+        )
         car_id = match.group(1)
         if car_id in found:
             continue
