@@ -51,6 +51,40 @@ class SnapshotGateTests(unittest.TestCase):
             broken = copy.deepcopy(data); mutate(broken)
             with self.assertRaises(ValueError): self.check(broken)
 
+    def test_pending_to_priced_transition_is_not_a_false_snapshot_failure(self):
+        data = self.fixture()
+        data['pages'][-1]['next_url'] = 'next'
+        data['pages'].append({'page':6, 'http_status':200, 'count':1, 'new':0,
+                              'next_url':None, 'pending_price_ids':['1']})
+        # A priced listing can also have appeared as pending on another page.
+        data['pending_price_cars'] = []
+        self.check(data)
+
+    def test_pending_repeat_across_pages_is_valid_source_evidence(self):
+        data = self.fixture()
+        data['pages'][-1]['next_url'] = 'next'
+        data['pages'].append({'page':6, 'http_status':200, 'count':1, 'new':0,
+                              'next_url':'next', 'pending_price_ids':['95143']})
+        data['pages'].append({'page':7, 'http_status':200, 'count':1, 'new':0,
+                              'next_url':None, 'pending_price_ids':['95143']})
+        data['pending_price_cars'] = [{'id':'95143', 'title':'DS DS4',
+                                      'url':'https://www.arvalclub.cz/cz/ds/ds4/95143/',
+                                      'mileage_km':42332, 'price_status':'pending'}]
+        self.check(data)
+
+    def test_pending_evidence_still_fails_closed_on_missing_or_malformed_record(self):
+        data = self.fixture()
+        data['pages'][-1]['next_url'] = 'next'
+        data['pages'].append({'page':6, 'http_status':200, 'count':1, 'new':0,
+                              'next_url':None, 'pending_price_ids':['95143']})
+        with self.assertRaisesRegex(ValueError, 'missing='):
+            self.check(data)
+        data['pending_price_cars'] = [{'id':'95143', 'title':'DS DS4',
+                                      'url':'https://www.arvalclub.cz/cz/ds/ds4/95143/?track=x',
+                                      'mileage_km':42332, 'price_status':'pending'}]
+        with self.assertRaisesRegex(ValueError, 'Malformed pending-price record'):
+            self.check(data)
+
     def test_partial_and_inconsistent_pages_rejected(self):
         for mutate in [lambda d:d.update(complete=False),
                        lambda d:d["pages"][-1].update(next_url="more"),
