@@ -152,6 +152,10 @@ def run():
             pending = {r['id']: r for r in pending_price_records(soup, final)}
             pending_prices.update(pending)
             incoming = {r["id"]: r for r in found}
+            conflicts = set(incoming) & set(pending)
+            if conflicts:
+                raise ValueError('Contradictory price status on one page: ' +
+                                 str(sorted(conflicts)[:10]))
             repeated = sorted(set(incoming) & set(cars))
             new = {key: val for key, val in incoming.items() if key not in cars}
             cars.update(new)
@@ -188,6 +192,14 @@ def run():
         print("STOP:", robots_info["error"], flush=True)
 
     complete = reason == "end_of_catalog" and len(cars) > 0
+    # A listing may change from "Cenu připravujeme" to a displayed price
+    # between pagination requests. Keep the real price and its page evidence.
+    transitioned = sorted(set(pending_prices) & set(cars))
+    if transitioned:
+        print(f'PENDING TO PRICED: {len(transitioned)} IDs, '
+              f'sample={transitioned[:10]}', flush=True)
+    pending_only = {id_: row for id_, row in pending_prices.items()
+                    if id_ not in cars}
     data = {
         "source": START,
         "captured_at_utc": started,
@@ -198,7 +210,7 @@ def run():
         "pages": pages,
         "total_unique": len(cars),
         "cars": sorted(cars.values(), key=lambda c: int(c["id"])),
-        "pending_price_cars": sorted(pending_prices.values(), key=lambda c: int(c['id'])),
+        "pending_price_cars": sorted(pending_only.values(), key=lambda c: int(c['id'])),
         "notes": [
             "Only unauthenticated public sale-listing data.",
             "Explicit pending-price listings are pagination evidence only; no invented price observations.",
